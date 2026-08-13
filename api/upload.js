@@ -3,7 +3,8 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import crypto from "crypto";
 
 export default async function handler(req, res) {
-  // Only POST allowed
+
+  // Only POST
   if (req.method !== "POST") {
     return res.status(405).json({
       success: false,
@@ -12,9 +13,10 @@ export default async function handler(req, res) {
   }
 
   try {
-    // -----------------------------
-    // Environment variables
-    // -----------------------------
+
+    // ============================================
+    // B2 CONFIG
+    // ============================================
 
     const endpoint = process.env.B2_ENDPOINT;
     const region = process.env.B2_REGION;
@@ -35,9 +37,9 @@ export default async function handler(req, res) {
       });
     }
 
-    // -----------------------------
-    // Get information from request
-    // -----------------------------
+    // ============================================
+    // REQUEST BODY
+    // ============================================
 
     const {
       fileName,
@@ -59,64 +61,85 @@ export default async function handler(req, res) {
       });
     }
 
-    // -----------------------------
-    // Validate file size
-    // -----------------------------
+    // ============================================
+    // FILE SIZE
+    // ============================================
 
-    const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500 MB
+    const MAX_FILE_SIZE = 1024 * 1024 * 1024; // 1 GB
 
-    if (fileSize && Number(fileSize) > MAX_FILE_SIZE) {
+    if (
+      fileSize &&
+      Number(fileSize) > MAX_FILE_SIZE
+    ) {
       return res.status(400).json({
         success: false,
-        error: "File is larger than 500 MB"
+        error: "File size exceeds 1 GB limit"
       });
     }
 
-    // -----------------------------
-    // Clean file name
-    // -----------------------------
+    // ============================================
+    // CLEAN FILE NAME
+    // ============================================
 
-    const originalName = fileName
+    const originalName = String(fileName)
       .split("/")
       .pop()
       .replace(/[^a-zA-Z0-9._-]/g, "_");
 
-    // -----------------------------
-    // Detect folder
-    // -----------------------------
+    // ============================================
+    // FOLDER
+    // ============================================
 
-    let folder = "other";
+    let folder = "files";
 
     if (contentType.startsWith("image/")) {
+
       folder = "images";
+
     } else if (contentType.startsWith("video/")) {
+
       folder = "videos";
+
     } else if (contentType.startsWith("audio/")) {
+
       folder = "audio";
-    } else if (
-      contentType === "application/pdf" ||
-      contentType.includes("document") ||
-      contentType.includes("text")
-    ) {
-      folder = "documents";
+
     } else if (
       contentType === "application/vnd.android.package-archive"
     ) {
+
       folder = "apk";
+
+    } else if (
+      contentType === "application/pdf" ||
+      contentType.startsWith("text/") ||
+      contentType.includes("document") ||
+      contentType.includes("spreadsheet")
+    ) {
+
+      folder = "documents";
     }
 
-    // -----------------------------
-    // Generate unique file name
-    // -----------------------------
+    // ============================================
+    // UNIQUE FILE KEY
+    // ============================================
 
-    const randomId = crypto.randomBytes(12).toString("hex");
+    const randomId = crypto
+      .randomBytes(12)
+      .toString("hex");
 
     const fileKey =
-      `${folder}/${Date.now()}-${randomId}-${originalName}`;
+      folder +
+      "/" +
+      Date.now() +
+      "-" +
+      randomId +
+      "-" +
+      originalName;
 
-    // -----------------------------
-    // Create B2 S3 client
-    // -----------------------------
+    // ============================================
+    // B2 S3 CLIENT
+    // ============================================
 
     const s3 = new S3Client({
       region: region,
@@ -127,9 +150,9 @@ export default async function handler(req, res) {
       }
     });
 
-    // -----------------------------
-    // Create upload command
-    // -----------------------------
+    // ============================================
+    // PUT OBJECT
+    // ============================================
 
     const command = new PutObjectCommand({
       Bucket: bucket,
@@ -137,9 +160,9 @@ export default async function handler(req, res) {
       ContentType: contentType
     });
 
-    // -----------------------------
-    // Generate temporary upload URL
-    // -----------------------------
+    // ============================================
+    // SIGNED UPLOAD URL
+    // ============================================
 
     const uploadUrl = await getSignedUrl(
       s3,
@@ -149,31 +172,50 @@ export default async function handler(req, res) {
       }
     );
 
-    // -----------------------------
-    // Response
-    // -----------------------------
+    // ============================================
+    // RESPONSE
+    // ============================================
 
     return res.status(200).json({
+
       success: true,
 
-      fileKey: fileKey,
+      message: "Upload URL generated successfully",
 
       fileName: originalName,
 
+      fileKey: fileKey,
+
       contentType: contentType,
+
+      fileSize: fileSize || null,
 
       uploadUrl: uploadUrl,
 
       expiresIn: 900
+
     });
 
   } catch (error) {
 
-    console.error("B2 upload URL error:", error);
+    console.error(
+      "B2 UPLOAD URL ERROR:",
+      error
+    );
 
     return res.status(500).json({
+
       success: false,
-      error: error.message || "Failed to create upload URL"
+
+      error:
+        error.message ||
+        "Failed to generate upload URL",
+
+      code:
+        error.Code ||
+        error.name ||
+        null
+
     });
   }
-        }
+}
