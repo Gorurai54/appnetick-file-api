@@ -1,4 +1,7 @@
-import { S3Client, ListBucketsCommand } from "@aws-sdk/client-s3";
+import {
+  S3Client,
+  HeadBucketCommand
+} from "@aws-sdk/client-s3";
 
 export default async function handler(req, res) {
   try {
@@ -11,14 +14,16 @@ export default async function handler(req, res) {
       }
     });
 
-    const result = await s3.send(
-      new ListBucketsCommand({})
+    await s3.send(
+      new HeadBucketCommand({
+        Bucket: process.env.B2_BUCKET
+      })
     );
 
     return res.status(200).json({
       success: true,
-      message: "B2 connection successful",
-      buckets: result.Buckets?.map(bucket => bucket.Name) || []
+      message: "B2 bucket connection successful",
+      bucket: process.env.B2_BUCKET
     });
 
   } catch (error) {
@@ -26,7 +31,8 @@ export default async function handler(req, res) {
 
     return res.status(500).json({
       success: false,
-      error: error.message
+      error: error.message,
+      code: error.Code || error.name || null
     });
   }
 }
