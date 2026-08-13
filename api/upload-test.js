@@ -3,6 +3,13 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import crypto from "crypto";
 
 export default async function handler(req, res) {
+  if (req.method !== "GET") {
+    return res.status(405).json({
+      success: false,
+      error: "GET only"
+    });
+  }
+
   try {
     const s3 = new S3Client({
       region: process.env.B2_REGION,
@@ -43,7 +50,7 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error(error);
+    console.error("B2 ERROR:", error);
 
     return res.status(500).json({
       success: false,
