@@ -35,6 +35,16 @@ export default async function handler(req, res) {
       ContentType: "text/plain"
     });
 
+
+    const bucket = process.env.B2_BUCKET;
+
+if (!bucket) {
+  return res.status(500).json({
+    success: false,
+    error: "B2_BUCKET is missing"
+  });
+}
+
     const uploadUrl = await getSignedUrl(
       s3,
       command,
